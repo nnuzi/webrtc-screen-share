@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>body { margin:0; background:#000; display:flex; justify-content:center; align-items:center; height:100vh; } video { width:100%; height:100%; object-fit:contain; }</style>
+</head>
+<body>
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="WebRTCManager.js"></script>
+    <script>
+        const socket = io();
+        const manager = new WebRTCManager();
+        
+        manager.addEventListener('track', (e) => document.getElementById('remoteVideo').srcObject = e.detail);
+        manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
+
+        socket.on('candidate', (c) => manager.addRemoteCandidate(c));
+
+        socket.on('offer', async (offer) => {
+            await manager.setRemote(offer);
+            const answer = await manager.pc.createAnswer();
+            await manager.pc.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
+    </script>
+    <script>
+        document.body.addEventListener('dblclick', () => {
+            if (!document.fullscreenElement) {
+                document.body.requestFullscreen().catch(err => {
+                    console.error(`全屏请求被拒绝: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+    </script>
+</body>
+</html>

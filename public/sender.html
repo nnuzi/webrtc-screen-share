@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h2>屏幕共享发送端</h2>
+    <button id="startBtn">开始屏幕共享</button>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="WebRTCManager.js"></script>
+    <script>
+        const socket = io();
+        const manager = new WebRTCManager();
+
+        manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
+        socket.on('candidate', (c) => manager.addRemoteCandidate(c));
+        socket.on('answer', (a) => manager.setRemote(a));
+
+        document.getElementById('startBtn').onclick = async () => {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    width: { ideal: 2560, max: 3840 },    // 理想 2K，最高 4K
+                    height: { ideal: 1440, max: 2160 },
+                    frameRate: { ideal: 60, max: 60 }     // 强制 60 帧
+                },
+                audio: false
+            });
+            const videoTrack = stream.getVideoTracks()[0];
+            setVideoTrackContentHints(stream, 'motion');
+            
+            const sender = manager.pc.addTrack(videoTrack, stream);
+            
+            // 指定 H264
+            setVideoCodecs(manager.pc, ['video/H264']);
+
+            const offer = await manager.pc.createOffer();
+            await manager.pc.setLocalDescription(offer);
+            socket.emit('offer', offer);
+
+            startBtn.disabled = true;
+            startBtn.innerText = "共享中 (超清高帧率模式)...";
+
+            videoTrack.onended = () => {
+                startBtn.disabled = false;
+                startBtn.innerText = "选择屏幕并开始共享";
+            };
+        };
+
+
+        function setVideoTrackContentHints(stream, hint) {
+            const tracks = stream.getVideoTracks();
+            tracks.forEach((track) => {
+                if ("contentHint" in track) {
+                    track.contentHint = hint;
+                    if (track.contentHint !== hint) {
+                        console.error(`Invalid video track contentHint: "${hint}", default to "${track.contentHint}"`);
+                    }
+                } else {
+                    console.error("MediaStreamTrack contentHint attribute not supported");
+                }
+            });
+        }
+        
+        function setVideoCodecs(peerConnection, codecs) {
+            const caps = RTCRtpSender.getCapabilities('video');
+            const filteredCodecs = caps.codecs.filter(c => codecs.includes(c.mimeType));
+            peerConnection.getTransceivers().forEach(transceiver => {
+                transceiver.setCodecPreferences(filteredCodecs);
+            });
+        }
+    
+    </script>
+</body>
+</html>
