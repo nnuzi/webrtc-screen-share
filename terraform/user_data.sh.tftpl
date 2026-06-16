@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+apt update -y
+apt install -y docker.io
+systemctl enable --now docker
+
+cd /opt
+git clone https://${github_token}@github.com/${github_repo}.git /opt/webrtc-screen-share
+cd /opt/webrtc-screen-share
+docker build -t webrtc-screen-share .
+docker run -d --restart unless-stopped -p 443:443 --name wss webrtc-screen-share

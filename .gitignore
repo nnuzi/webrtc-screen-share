@@ -1,3 +1,9 @@
 node_modules/
 dist/
 build/
+
+# Terraform state & keys
+terraform/webrtc-screen-share-key.pem
+terraform/.terraform*
+terraform/terraform.tfstate*
+*.tfvars

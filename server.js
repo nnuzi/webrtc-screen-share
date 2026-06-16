@@ -1,7 +1,25 @@
 const express = require('express');
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const fs = require('fs');
+const http = require('http');
+
+const certPath = '/etc/ssl/certs/server.crt';
+const keyPath = '/etc/ssl/private/server.key';
+const hasCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
+const PORT = hasCert ? 443 : 3000;
+
+let server;
+if (hasCert) {
+    const https = require('https');
+    server = https.createServer({
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath),
+    }, app);
+} else {
+    server = http.createServer(app);
+}
+
+const io = require('socket.io')(server);
 
 // 托管 public 文件夹中的静态页面
 app.use(express.static('public'));
@@ -22,15 +40,11 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('candidate', candidate);
     });
 
-
-    socket.on("disconnect", (socket) => {
-        console.log('有设备断开:', socket);
-    })
-
+    socket.on('disconnect', () => {
+        console.log('有设备断开:', socket.id);
+    });
 });
 
-
-const PORT = 3000;
-http.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器已启动，请访问 http://localhost:${PORT}/sender.html`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`${hasCert ? 'HTTPS' : 'HTTP'} server on port ${PORT}`);
 });
