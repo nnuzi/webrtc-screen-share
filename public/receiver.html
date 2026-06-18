@@ -51,18 +51,48 @@
 
         manager.addEventListener('track', (e) => {
             remoteVideo.srcObject = e.detail;
-            overlay.classList.add('hidden');
         });
 
         manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
         socket.on('candidate', (c) => manager.addRemoteCandidate(c));
 
+        manager.addEventListener('statechange', (e) => {
+            const state = e.detail;
+            if (state === 'connected' && remoteVideo.srcObject) {
+                overlay.classList.add('hidden');
+            } else if (state === 'disconnected') {
+                overlay.classList.remove('hidden');
+                statusMsg.textContent = '连接已断开，等待恢复...';
+                document.querySelector('.hint').textContent = '';
+            } else if (state === 'failed') {
+                overlay.classList.remove('hidden');
+                statusMsg.textContent = '连接失败，请刷新页面重试';
+                document.querySelector('.hint').textContent = '';
+            } else if (state === 'closed') {
+                overlay.classList.remove('hidden');
+                statusMsg.textContent = '连接已关闭';
+                document.querySelector('.hint').textContent = '';
+            }
+        });
+
+        socket.on('disconnect', () => {
+            overlay.classList.remove('hidden');
+            statusMsg.textContent = '与服务器断开，正在重连...';
+            document.querySelector('.hint').textContent = '';
+        });
+
         socket.on('offer', async (offer) => {
             statusMsg.textContent = '正在连接...';
-            await manager.setRemote(offer);
-            const answer = await manager.pc.createAnswer();
-            await manager.pc.setLocalDescription(answer);
-            socket.emit('answer', answer);
+            try {
+                await manager.setRemote(offer);
+                const answer = await manager.pc.createAnswer();
+                await manager.pc.setLocalDescription(answer);
+                socket.emit('answer', answer);
+            } catch (err) {
+                overlay.classList.remove('hidden');
+                statusMsg.textContent = '连接失败: ' + (err.message || '未知错误');
+                document.querySelector('.hint').textContent = '请让发送端重新开始共享';
+            }
         });
     </script>
     <script>
