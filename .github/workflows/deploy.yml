@@ -20,7 +20,7 @@ jobs:
         working-directory: terraform
       - name: Remove stale lock file
         run: aws s3 rm s3://wss-terraform-state-298370269944/terraform.tfstate.tflock || true
-      - run: terraform apply -auto-approve -lock-timeout=60s
+      - run: timeout 180 terraform apply -auto-approve -lock-timeout=60s
         working-directory: terraform
         env:
           TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
