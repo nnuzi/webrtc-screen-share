@@ -9,4 +9,8 @@ cd /opt
 git clone https://${github_token}@github.com/${github_repo}.git /opt/webrtc-screen-share
 cd /opt/webrtc-screen-share
 docker build -t webrtc-screen-share .
-docker run -d --restart unless-stopped -p 443:443 --name wss webrtc-screen-share
+
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+docker run -d --restart unless-stopped -p 443:443 \
+  -e PUBLIC_URL="https://$PUBLIC_IP" \
+  --name wss webrtc-screen-share

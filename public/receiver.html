@@ -1,22 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <style>body { margin:0; background:#000; display:flex; justify-content:center; align-items:center; height:100vh; } video { width:100%; height:100%; object-fit:contain; }</style>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { margin:0; background:#000; display:flex; justify-content:center; align-items:center; height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; overflow:hidden; }
+    video { width:100%; height:100%; object-fit:contain; }
+    #overlay {
+        position:fixed; inset:0; display:flex; flex-direction:column;
+        justify-content:center; align-items:center; background:#1a1a1a;
+        color:#fff; z-index:10; transition:opacity .4s;
+    }
+    #overlay.hidden { opacity:0; pointer-events:none; }
+    .spinner {
+        width:36px; height:36px; border:3px solid rgba(255,255,255,.15);
+        border-top-color:#fff; border-radius:50%;
+        animation:spin .8s linear infinite; margin-bottom:16px;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #overlay .hint { color:rgba(255,255,255,.5); font-size:13px; margin-top:8px; }
+</style>
 </head>
 <body>
+    <div id="overlay">
+        <div class="spinner"></div>
+        <div id="statusMsg">正在连接...</div>
+        <div class="hint">请确保发送端已开始共享</div>
+    </div>
     <video id="remoteVideo" autoplay playsinline muted></video>
     <script src="/socket.io/socket.io.js"></script>
     <script src="WebRTCManager.js"></script>
     <script>
-        const socket = io();
-        const manager = new WebRTCManager();
-        
-        manager.addEventListener('track', (e) => document.getElementById('remoteVideo').srcObject = e.detail);
-        manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
+        const overlay = document.getElementById('overlay');
+        const statusMsg = document.getElementById('statusMsg');
+        const remoteVideo = document.getElementById('remoteVideo');
 
+        const room = new URLSearchParams(location.search).get('room');
+        if (!room) {
+            statusMsg.textContent = '缺少房间号，请通过二维码加入';
+            document.querySelector('.hint').textContent = '';
+            throw new Error('Missing room query parameter');
+        }
+
+        const socket = io(undefined, { query: { room } });
+        const manager = new WebRTCManager();
+
+        socket.on('connect', () => {
+            statusMsg.textContent = '等待发送端开始共享...';
+            socket.emit('ready');
+        });
+
+        manager.addEventListener('track', (e) => {
+            remoteVideo.srcObject = e.detail;
+            overlay.classList.add('hidden');
+        });
+
+        manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
         socket.on('candidate', (c) => manager.addRemoteCandidate(c));
 
         socket.on('offer', async (offer) => {
+            statusMsg.textContent = '正在连接...';
             await manager.setRemote(offer);
             const answer = await manager.pc.createAnswer();
             await manager.pc.setLocalDescription(answer);
@@ -26,9 +68,7 @@
     <script>
         document.body.addEventListener('dblclick', () => {
             if (!document.fullscreenElement) {
-                document.body.requestFullscreen().catch(err => {
-                    console.error(`全屏请求被拒绝: ${err.message}`);
-                });
+                document.body.requestFullscreen().catch(() => {});
             } else {
                 document.exitFullscreen();
             }
