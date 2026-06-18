@@ -18,7 +18,10 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - run: terraform init
         working-directory: terraform
-      - run: terraform apply -auto-approve
+      - name: Remove stale lock file
+        run: aws s3 rm s3://wss-terraform-state-298370269944/terraform.tfstate.tflock || true
+      - run: terraform apply -auto-approve -lock-timeout=60s
         working-directory: terraform
         env:
           TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
+          TF_LOG: INFO
