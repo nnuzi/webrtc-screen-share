@@ -16,3 +16,8 @@ variable "github_token" {
   description = "GitHub Personal Access Token with repo scope"
   sensitive   = true
 }
+
+variable "image_tag" {
+  description = "Docker image tag to deploy"
+  type        = string
+}

@@ -31,10 +31,14 @@ resource "aws_instance" "wss" {
   subnet_id              = aws_subnet.wss.id
   vpc_security_group_ids = [aws_security_group.wss.id]
   key_name               = aws_key_pair.wss.key_name
+  iam_instance_profile   = aws_iam_instance_profile.wss.name
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
-    github_repo  = var.github_repo
-    github_token = var.github_token
+    github_repo        = var.github_repo
+    github_token       = var.github_token
+    image_tag          = var.image_tag
+    ecr_repository_url = aws_ecr_repository.wss.repository_url
+    aws_region         = var.aws_region
   })
 
   root_block_device {
