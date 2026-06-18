@@ -4,6 +4,8 @@
 
 Real-time screen sharing app using WebRTC + Socket.IO. Sender (desktop) pushes screen capture to receivers (tablets, laptops) over LAN via P2P media stream. Server acts only as signaling relay — media never passes through server.
 
+Deployed on AWS EC2 with CI/CD via GitHub Actions. Docker image built in CI and pushed to ECR.
+
 ## Architecture
 
 ```
@@ -14,20 +16,24 @@ Sender (sender.html)                    Receiver (receiver.html)
   │  sets H.264 codec preference        │  double-click to fullscreen
   └──→ Socket.IO (signaling) ←───────────┘
          │  Express static server
-         │  port 3000, binds 0.0.0.0
+         │  port 443 (HTTPS) / 3000 (HTTP)
          │  GET /api/server-info → { ip, port }
+         └── AWS EC2 (Docker) ←── CI/CD (GH Actions)
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `server.js` | Express + Socket.IO signaling server (entry point); exposes `/api/server-info` |
+| `server.js` | Express + Socket.IO signaling server; exports `createServer` for testing |
 | `public/sender.html` | Screen share sender — create room, wait for receiver, then `getDisplayMedia` + WebRTC offer |
 | `public/receiver.html` | Viewer — joins room via `?room=`, emits `ready`, receives offer, plays video |
-| `public/WebRTCManager.js` | `RTCPeerConnection` wrapper with ICE candidate queuing |
+| `public/WebRTCManager.js` | `RTCPeerConnection` wrapper with ICE candidate queuing; exports class for tests |
 | `PLAN.md` | Development roadmap (4 phases) |
-| `package.json` | Deps: express ^5.2.1, socket.io ^4.8.3 |
+| `package.json` | Deps: express ^5.2.1, socket.io ^4.8.3; devDeps: vitest, eslint |
+| `terraform/` | AWS infra: VPC, EC2, EIP, ECR, IAM, security group |
+| `.github/workflows/deploy.yml` | CI/CD pipeline: check → build-push → deploy |
+| `test/` | 14 tests covering server API, signaling, and WebRTCManager |
 
 ## Server Endpoints
 
@@ -41,6 +47,16 @@ Sender (sender.html)                    Receiver (receiver.html)
 | Variable | Purpose |
 |----------|---------|
 | `PUBLIC_URL` | Overrides `/api/server-info` with public address (e.g. `https://12.34.56.78`) |
+
+## CI/CD Pipeline
+
+```
+main push → check (npm test + lint + docker build)
+                ↓
+          build-push (ECR: tag=commit SHA + latest, keep last 2)
+                ↓
+          deploy (terraform apply + health check)
+```
 
 ## WebRTCManager Class (`public/WebRTCManager.js`)
 
@@ -87,20 +103,38 @@ Sender (sender.html)                    Receiver (receiver.html)
 
 ```bash
 npm install
-node server.js
+npm test                 # vitest run (14 tests)
+npm run lint             # eslint server.js
+node server.js           # dev (HTTP on :3000)
+docker build -t wss .    # or use ECR image from CI
+
 # Sender: http://localhost:3000/sender.html        (must use localhost!)
 # Receiver: http://<lan-ip>:3000/receiver.html?room=xxx
+# Deployed: https://18.176.13.110/sender.html
 ```
+
+## Infrastructure
+
+| Resource | Detail |
+|----------|--------|
+| EC2 | t3.micro, Ubuntu 22.04, ap-northeast-1 |
+| EIP | 18.176.13.110 |
+| ECR | `298370269944.dkr.ecr.ap-northeast-1.amazonaws.com/webrtc-screen-share` |
+| IAM | Instance profile `webrtc-screen-share-ec2` with ECR read |
+| Terraform state | S3 `wss-terraform-state-298370269944` (+ native lock) |
 
 ## Notes for AI
 
 - All client JS is vanilla (no framework), inline in HTML
-- `WebRTCManager.js` is shared between sender and receiver
+- `WebRTCManager.js` is shared between sender and receiver; exported via `module.exports` for tests
 - Socket.IO is loaded from server-side `/socket.io/socket.io.js`
-- No test framework configured (`package.json` test is placeholder)
+- Test framework: vitest (14 tests in `test/`), no E2E tests
 - Express v5 uses `req.query` changes vs v4; be aware if adding routes
 - Prefer H.264 codec; fallback to browser default if unavailable
 - QR code generated via external API (`api.qrserver.com`)
 - Sender page MUST be accessed via `localhost` due to `getDisplayMedia` secure context requirement
 - Receiver `?room=` parameter is required; missing it shows error overlay
 - Room isolation is implemented — multiple `?room=` groups don't interfere
+- No STUN/TURN configured — video flows over LAN only (host candidates)
+- `createServer(port)` in server.js returns `{ app, io, server }` for testing; auto-starts on require.main === module
+- Terraform `image_tag` variable controls which ECR image to deploy (set via `TF_VAR_image_tag` in CI)
