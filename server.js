@@ -9,19 +9,6 @@ const keyPath = '/etc/ssl/private/server.key';
 const hasCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
 const PORT = hasCert ? 443 : 3000;
 
-let server;
-if (hasCert) {
-    const https = require('https');
-    server = https.createServer({
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath),
-    }, app);
-} else {
-    server = http.createServer(app);
-}
-
-const io = require('socket.io')(server);
-
 function getLanIp() {
     const interfaces = os.networkInterfaces();
     for (const name of Object.keys(interfaces)) {
@@ -42,36 +29,40 @@ app.get('/api/server-info', (req, res) => {
     res.json({ ip: getLanIp(), port: PORT, protocol });
 });
 
-// 托管 public 文件夹中的静态页面
 app.use(express.static('public'));
 
-io.on('connection', (socket) => {
-    const room = socket.handshake.query.room || 'default';
-    socket.join(room);
-    console.log(`[${room}] 设备连接:`, socket.id);
+function createServer(port) {
+    let server;
+    if (hasCert) {
+        const https = require('https');
+        server = https.createServer({
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath),
+        }, app);
+    } else {
+        server = http.createServer(app);
+    }
 
-    socket.on('offer', (offer) => {
-        socket.to(room).emit('offer', offer);
+    const io = require('socket.io')(server);
+
+    io.on('connection', (socket) => {
+        const room = socket.handshake.query.room || 'default';
+        socket.join(room);
+
+        socket.on('offer', (offer) => { socket.to(room).emit('offer', offer); });
+        socket.on('answer', (answer) => { socket.to(room).emit('answer', answer); });
+        socket.on('candidate', (candidate) => { socket.to(room).emit('candidate', candidate); });
+        socket.on('ready', () => { socket.to(room).emit('receiver-ready'); });
+        socket.on('disconnect', () => {});
     });
 
-    socket.on('answer', (answer) => {
-        socket.to(room).emit('answer', answer);
-    });
+    server.listen(port !== undefined ? port : PORT, '0.0.0.0');
+    return { app, io, server };
+}
 
-    // 转发网络候选者 (双向互相寻找连接点)
-    socket.on('candidate', (candidate) => {
-        socket.to(room).emit('candidate', candidate);
-    });
-
-    socket.on('ready', () => {
-        socket.to(room).emit('receiver-ready');
-    });
-
-    socket.on('disconnect', () => {
-        console.log(`[${room}] 设备断开:`, socket.id);
-    });
-});
-
-server.listen(PORT, '0.0.0.0', () => {
+if (require.main === module) {
+    const { server } = createServer(PORT);
     console.log(`${hasCert ? 'HTTPS' : 'HTTP'} server on port ${PORT}`);
-});
+}
+
+module.exports = { createServer };

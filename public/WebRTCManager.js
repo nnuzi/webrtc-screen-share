@@ -31,3 +31,7 @@ class WebRTCManager extends EventTarget {
         this.queue = [];
     }
 }
+
+if (typeof module !== 'undefined') {
+    module.exports = WebRTCManager;
+}
