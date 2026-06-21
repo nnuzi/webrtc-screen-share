@@ -40,6 +40,7 @@ resource "aws_instance" "wss" {
     ecr_repository_url = aws_ecr_repository.wss.repository_url
     aws_region         = var.aws_region
   })
+  user_data_replace_on_change = true
 
   root_block_device {
     volume_size = 8
