@@ -19,6 +19,8 @@ function getLanIp() {
     return '127.0.0.1';
 }
 
+app.get('/favicon.ico', (req, res) => res.redirect('/favicon.svg'));
+
 app.get('/api/server-info', (req, res) => {
     const protocol = hasCert ? 'https' : 'http';
     if (process.env.PUBLIC_URL) {
