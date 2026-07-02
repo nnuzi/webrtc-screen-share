@@ -113,7 +113,7 @@
                 $qrcode.appendChild(img);
 
                 socket = io(undefined, { query: { room } });
-                manager = new WebRTCManager();
+                manager = new WebRTCManager({ bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 10 });
 
                 manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
                 socket.on('candidate', (c) => manager.addRemoteCandidate(c));
@@ -157,8 +157,8 @@
             try {
                 const stream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        width: { ideal: 2560, max: 3840 },
-                        height: { ideal: 1440, max: 2160 },
+                        width: { ideal: 2560, max: 2560 },
+                        height: { ideal: 1440, max: 1440 },
                         frameRate: { ideal: 60, max: 60 }
                     },
                     audio: false
@@ -170,7 +170,24 @@
                 setVideoCodecs(manager.pc, ['video/H264']);
 
                 const offer = await manager.pc.createOffer();
+                const sdp = offer.sdp.replace(/a=fmtp:(\d+) ([^\r\n]*)/g, (match, pt, params) => {
+                    if (offer.sdp.includes(`a=rtpmap:${pt} H264`) && !params.includes('x-google-flag')) {
+                        return `a=fmtp:${pt} ${params};x-google-flag=1`;
+                    }
+                    return match;
+                });
+                offer.sdp = sdp;
                 await manager.pc.setLocalDescription(offer);
+
+                const sender = manager.pc.getSenders()[0];
+                const params = sender.getParameters();
+                if (params.encodings?.length) {
+                    params.encodings[0].maxBitrate = 20_000_000;
+                    params.encodings[0].maxFramerate = 60;
+                    params.degradationPreference = 'maintain-framerate';
+                    await sender.setParameters(params);
+                }
+
                 socket.emit('offer', offer);
 
                 isSharing = true;
@@ -204,7 +221,7 @@
                 try { manager.pc.close(); } catch (_) {}
                 manager = null;
             }
-            manager = new WebRTCManager();
+            manager = new WebRTCManager({ bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 10 });
             manager.addEventListener('icecandidate', (e) => socket.emit('candidate', e.detail));
             manager.addEventListener('statechange', (e) => {
                 const s = e.detail;

@@ -38,6 +38,7 @@
         const overlay = document.getElementById('overlay');
         const statusMsg = document.getElementById('statusMsg');
         const remoteVideo = document.getElementById('remoteVideo');
+        remoteVideo.playoutDelayHint = 0;
 
         const room = new URLSearchParams(location.search).get('room');
         if (!room) {
@@ -47,7 +48,7 @@
         }
 
         const socket = io(undefined, { query: { room } });
-        const manager = new WebRTCManager();
+        const manager = new WebRTCManager({ bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 10 });
 
         socket.on('connect', () => {
             statusMsg.textContent = '等待发送端开始共享...';

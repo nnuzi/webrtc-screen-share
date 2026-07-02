@@ -2,6 +2,17 @@ node_modules/
 dist/
 build/
 
+# AI agent context (local only, not committed)
+AGENTS.md
+PLAN.md
+TODO.md
+
+# macOS metadata
+.DS_Store
+
+# WebRTC optimization changelog (local only, not committed)
+WEBCRT_OPTIMIZATIONS.md
+
 # Terraform state & keys
 terraform/webrtc-screen-share-key.pem
 terraform/.terraform*
