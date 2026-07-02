@@ -58,7 +58,7 @@ jobs:
           TF_VAR_github_repo: ${{ github.repository }}
           TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
           TF_VAR_image_tag: ${{ github.sha }}
-      - run: terraform apply tfplan -auto-approve
+      - run: terraform apply tfplan
         working-directory: terraform
         env:
           TF_VAR_github_repo: ${{ github.repository }}
