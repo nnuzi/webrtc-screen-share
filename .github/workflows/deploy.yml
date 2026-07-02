@@ -55,7 +55,7 @@ jobs:
       - run: terraform apply -auto-approve -lock-timeout=60s
         working-directory: terraform
         env:
-          TF_VAR_github_repo: lihroff/webrtc-screen-share
+          TF_VAR_github_repo: nnuzi/webrtc-screen-share
           TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
           TF_VAR_image_tag: ${{ github.sha }}
       - run: |
