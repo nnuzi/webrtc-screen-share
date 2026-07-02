@@ -117,4 +117,29 @@ describe('WebRTCManager', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toBe('connected');
   });
+
+  it('close() cleans up and prevents further operations', async () => {
+    const manager = new WebRTCManager({});
+    manager.close();
+    expect(manager._closed).toBe(true);
+    await expect(manager.setRemote({ type: 'offer', sdp: 'test' })).rejects.toThrow('WebRTCManager is closed');
+  });
+
+  it('handles addIceCandidate failure gracefully', async () => {
+    const manager = new WebRTCManager({});
+    manager.pc.addIceCandidate = () => Promise.reject(new Error('Invalid candidate'));
+    await manager.setRemote({ type: 'offer', sdp: 'test' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    manager.queue.push({ candidate: 'bad' });
+    await manager.setRemote({ type: 'offer', sdp: 'test' });
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('ignores addRemoteCandidate after close', async () => {
+    const manager = new WebRTCManager({});
+    manager.close();
+    await manager.addRemoteCandidate({ candidate: 'test' });
+    expect(manager.queue).toHaveLength(0);
+  });
 });

@@ -1,9 +1,10 @@
 {
   "name": "webrtc-screen-share",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Real-time LAN screen sharing via WebRTC + Socket.IO",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "lint": "eslint server.js",
     "test": "vitest run"
   },

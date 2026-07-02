@@ -52,18 +52,28 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - run: terraform init
         working-directory: terraform
-      - run: terraform apply -auto-approve -lock-timeout=60s
+      - run: terraform plan -out=tfplan -lock-timeout=60s
         working-directory: terraform
         env:
-          TF_VAR_github_repo: nnuzi/webrtc-screen-share
+          TF_VAR_github_repo: ${{ github.repository }}
           TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
           TF_VAR_image_tag: ${{ github.sha }}
+      - run: terraform apply tfplan -auto-approve
+        working-directory: terraform
+        env:
+          TF_VAR_github_repo: ${{ github.repository }}
+          TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
+          TF_VAR_image_tag: ${{ github.sha }}
+      - id: get_eip
+        run: echo "eip=$(terraform output -raw eip)" >> "$GITHUB_OUTPUT"
+        working-directory: terraform
       - run: |
           echo "Waiting for service..."
           sleep 30
           for i in 1 2 3 4 5 6 7 8 9 10; do
-            curl -sSk --connect-timeout 5 https://18.176.13.110/api/server-info && echo " Health check passed" && exit 0
+            curl -sSk --connect-timeout 5 https://${{ steps.get_eip.outputs.eip }}/api/server-info && echo " Health check passed" && exit 0
             echo "Retry $i..."
             sleep 10
           done
-          echo "Health check failed" && exit 1
+          echo "Health check failed"
+          exit 1

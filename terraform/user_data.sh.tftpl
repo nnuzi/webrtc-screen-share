@@ -14,16 +14,26 @@ if docker pull ${ecr_repository_url}:${image_tag}; then
   IMAGE=${ecr_repository_url}:${image_tag}
 else
   cd /opt
-  apt install -y git
-  git clone https://${github_token}@github.com/${github_repo}.git webrtc-screen-share
-  cd /opt/webrtc-screen-share
-  docker build -t webrtc-screen-share .
-  IMAGE=webrtc-screen-share
+  if [ ! -d webrtc-screen-share ]; then
+    apt install -y git
+    git clone https://${github_token}@github.com/${github_repo}.git webrtc-screen-share
+    cd /opt/webrtc-screen-share
+    docker build -t webrtc-screen-share .
+    IMAGE=webrtc-screen-share
+  else
+    cd /opt/webrtc-screen-share
+    docker build -t webrtc-screen-share .
+    IMAGE=webrtc-screen-share
+  fi
 fi
 
 docker rm -f wss 2>/dev/null || true
 
-PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+PUBLIC_IP=$(curl -s --connect-timeout 5 http://169.254.169.254/latest/meta-data/public-ipv4 || echo "")
+if [ -z "$PUBLIC_IP" ]; then
+  echo "Warning: Could not get public IP from metadata, using hostname"
+  PUBLIC_IP=$(hostname -f)
+fi
 docker run -d --restart unless-stopped -p 443:443 \
   -e PUBLIC_URL="https://$PUBLIC_IP" \
   --name wss $IMAGE

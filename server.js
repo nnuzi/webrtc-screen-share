@@ -4,10 +4,10 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 
-const certPath = '/etc/ssl/certs/server.crt';
-const keyPath = '/etc/ssl/private/server.key';
+const certPath = process.env.SSL_CERT_PATH || '/etc/ssl/certs/server.crt';
+const keyPath = process.env.SSL_KEY_PATH || '/etc/ssl/private/server.key';
 const hasCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
-const PORT = hasCert ? 443 : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (hasCert ? 443 : 3000);
 
 function getLanIp() {
     const interfaces = os.networkInterfaces();
@@ -22,13 +22,18 @@ function getLanIp() {
 app.get('/favicon.ico', (req, res) => res.redirect('/favicon.svg'));
 
 app.get('/api/server-info', (req, res) => {
-    const protocol = hasCert ? 'https' : 'http';
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     if (process.env.PUBLIC_URL) {
-        const url = new URL(process.env.PUBLIC_URL);
-        res.json({ ip: url.hostname, port: url.port || (protocol === 'https' ? '443' : '3000'), protocol });
+        try {
+            const url = new URL(process.env.PUBLIC_URL);
+            const proto = url.protocol === 'https:' ? 'https' : 'http';
+            res.json({ ip: url.hostname, port: url.port || (proto === 'https' ? '443' : '3000'), protocol: proto });
+        } catch {
+            res.status(400).json({ error: 'Invalid PUBLIC_URL' });
+        }
         return;
     }
-    res.json({ ip: getLanIp(), port: PORT, protocol });
+    res.json({ ip: getLanIp(), port: PORT, protocol: hasCert ? 'https' : 'http' });
 });
 
 app.use(express.static('public'));
@@ -55,15 +60,18 @@ function createServer(port) {
         socket.on('answer', (answer) => { socket.to(room).emit('answer', answer); });
         socket.on('candidate', (candidate) => { socket.to(room).emit('candidate', candidate); });
         socket.on('ready', () => { socket.to(room).emit('receiver-ready'); });
-        socket.on('disconnect', () => {});
+
+        socket.on('disconnect', () => {
+            socket.to(room).emit('peer-disconnected', { room });
+        });
     });
 
-    server.listen(port !== undefined ? port : PORT, '0.0.0.0');
+    server.listen(port !== undefined ? port : PORT, process.env.BIND_ADDRESS || '0.0.0.0');
     return { app, io, server };
 }
 
 if (require.main === module) {
-    const { server } = createServer(PORT);
+    createServer(PORT);
     console.log(`${hasCert ? 'HTTPS' : 'HTTP'} server on port ${PORT}`);
 }
 

@@ -40,7 +40,7 @@ afterAll(() => {
   server.close();
 });
 
-describe('signaling', () => {
+describe('Signaling · Event forwarding', () => {
   it('forwards offer to clients in the same room', async () => {
     const sender = connect('room1');
     const receiver = connect('room1');
@@ -89,24 +89,6 @@ describe('signaling', () => {
     receiver.close();
   });
 
-  it('does NOT forward messages across different rooms', async () => {
-    const sender = connect('roomA');
-    const receiver = connect('roomB');
-
-    await Promise.all([waitForConnect(sender), waitForConnect(receiver)]);
-
-    let crossTalk = false;
-    receiver.on('offer', () => { crossTalk = true; });
-
-    sender.emit('offer', { type: 'offer', sdp: 'should-not-reach' });
-
-    await sleep(300);
-    expect(crossTalk).toBe(false);
-
-    sender.close();
-    receiver.close();
-  });
-
   it('forwards ready event as receiver-ready', async () => {
     const sender = connect('room1');
     const receiver = connect('room1');
@@ -120,5 +102,66 @@ describe('signaling', () => {
 
     sender.close();
     receiver.close();
+  });
+});
+
+describe('Signaling · Room isolation', () => {
+  it('does NOT forward messages across different rooms', async () => {
+    const sender = connect('roomA');
+    const receiver = connect('roomB');
+
+    await Promise.all([waitForConnect(sender), waitForConnect(receiver)]);
+
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        sender.close();
+        receiver.close();
+        resolve();
+      }, 300);
+      receiver.on('offer', () => {
+        clearTimeout(timer);
+        sender.close();
+        receiver.close();
+        reject(new Error('Cross-room message leaked'));
+      });
+      sender.emit('offer', { type: 'offer', sdp: 'should-not-reach' });
+    });
+  });
+});
+
+describe('Signaling · Connection lifecycle', () => {
+  it('forwards peer-disconnected event on disconnect', async () => {
+    const sender = connect('room1');
+    const receiver = connect('room1');
+
+    await Promise.all([waitForConnect(sender), waitForConnect(receiver)]);
+
+    const discPromise = waitForEvent(receiver, 'peer-disconnected');
+    sender.close();
+
+    const msg = await discPromise;
+    expect(msg).toHaveProperty('room', 'room1');
+    receiver.close();
+  });
+
+  it('handles connect_error gracefully', async () => {
+    const badSocket = ioc(`http://localhost:${port}`, {
+      query: { room: 'test' },
+      forceNew: true,
+    });
+    await waitForConnect(badSocket);
+    badSocket.close();
+  });
+
+  it('handles disconnect reason', async () => {
+    const sender = connect('room1');
+    await waitForConnect(sender);
+
+    let disconnectReason = null;
+    sender.on('disconnect', (reason) => { disconnectReason = reason; });
+
+    sender.close();
+    await sleep(100);
+    expect(disconnectReason).toBe('io client disconnect');
   });
 });

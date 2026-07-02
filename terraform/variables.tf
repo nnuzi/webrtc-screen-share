@@ -9,7 +9,7 @@ variable "instance_type" {
 }
 
 variable "github_repo" {
-  description = "GitHub repository path, e.g. lihroff/webrtc-screen-share"
+  description = "GitHub repository path, e.g. nnuzi/webrtc-screen-share"
 }
 
 variable "github_token" {
@@ -20,4 +20,10 @@ variable "github_token" {
 variable "image_tag" {
   description = "Docker image tag to deploy"
   type        = string
+}
+
+variable "ssh_allowed_ip" {
+  description = "IP CIDR allowed to SSH into the EC2 instance"
+  type        = string
+  default     = "0.0.0.0/0"
 }
