@@ -32,26 +32,8 @@ docker rm -f wss 2>/dev/null || true
 docker run -d --restart unless-stopped -p 443:443 \
   --name wss $IMAGE
 
-# Install cloudflared
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
-
-# Create cloudflared tunnel systemd service
-cat > /etc/systemd/system/cloudflared-tunnel.service << 'EOF'
-[Unit]
-Description=Cloudflare Tunnel (Quick Tunnel)
-After=docker.service
-Requires=docker.service
-
-[Service]
-ExecStart=/usr/local/bin/cloudflared tunnel --url https://localhost:443 --no-tls-verify
-Restart=always
-RestartSec=5
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable --now cloudflared-tunnel
+# Start cloudflared Quick Tunnel (Docker)
+docker run -d --restart unless-stopped --network host \
+  --name cloudflared-tunnel \
+  cloudflare/cloudflared:latest tunnel --no-autoupdate \
+  --url https://localhost:443 --no-tls-verify
