@@ -77,3 +77,18 @@ jobs:
           done
           echo "Health check failed"
           exit 1
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          chmod 600 ~/.ssh/ec2-key.pem
+
+      - name: Get tunnel URL
+        run: |
+          sleep 10
+          URL=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2-key.pem ubuntu@${{ steps.get_eip.outputs.eip }} \
+            "sudo docker logs cloudflared-tunnel 2>&1 | grep -o 'https://[^ ]*\.trycloudflare\.com' | tail -1")
+          echo "### Tunnel URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tunnel URL: $URL"

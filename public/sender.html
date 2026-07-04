@@ -12,11 +12,6 @@
     <div class="bg-white p-10 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.08)] text-center max-w-sm w-full">
         <div id="landing">
             <h2 class="mb-6 text-gray-900 font-semibold text-xl">屏幕共享</h2>
-            <div class="mb-5 text-left">
-                <label for="serverAddr" class="block mb-1.5 text-gray-500 text-sm font-medium">服务器地址</label>
-                <input id="serverAddr" type="text" readonly tabindex="-1" class="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-colors bg-gray-50 cursor-default">
-                <div class="text-gray-400 text-xs mt-1">接收端扫码时使用此地址连接</div>
-            </div>
             <button id="createBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-blue-500 text-white hover:opacity-80">创建共享房间</button>
         </div>
 
@@ -40,7 +35,6 @@
         const $ = id => document.getElementById(id);
         const $landing = $('landing');
         const $sharing = $('sharing');
-        const $serverAddr = $('serverAddr');
         const $createBtn = $('createBtn');
         const $roomCode = $('roomCode');
         const $qrcode = $('qrcode');
@@ -54,19 +48,11 @@
         const BTN_BLUE = 'w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-blue-500 text-white hover:opacity-80';
 
         let socket, manager, room, isSharing;
-        let serverProto = 'http';
         let reconnectAttempts = 0;
         let reconnectTimer = null;
         const WEBRTC_CONFIG = { bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 10 };
         const MAX_RECONNECT_ATTEMPTS = 3;
         const RECONNECT_DEBOUNCE_MS = 3000;
-
-        fetch('/api/server-info').then(r => r.json()).then(info => {
-            $serverAddr.value = `${info.ip}:${info.port}`;
-            if (info.protocol) serverProto = info.protocol;
-        }).catch(() => {
-            $serverAddr.value = location.host;
-        });
 
         function setupManagerListeners(mgr) {
             mgr.addEventListener('icecandidate', (e) => {
@@ -167,13 +153,12 @@
                 }
 
                 room = Math.random().toString(36).substring(2, 8).toLowerCase();
-                const serverAddr = $serverAddr.value.trim() || location.host;
 
                 $landing.classList.add('hidden');
                 $sharing.classList.remove('hidden');
                 $roomCode.textContent = room;
 
-                const receiverUrl = `${serverProto}://${serverAddr}/receiver.html?room=${room}`;
+                const receiverUrl = `${location.origin}/receiver.html?room=${room}`;
                 $receiverLink.textContent = receiverUrl;
 
                 const img = new Image();
