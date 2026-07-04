@@ -29,11 +29,29 @@ fi
 
 docker rm -f wss 2>/dev/null || true
 
-PUBLIC_IP=$(curl -s --connect-timeout 5 http://169.254.169.254/latest/meta-data/public-ipv4 || echo "")
-if [ -z "$PUBLIC_IP" ]; then
-  echo "Warning: Could not get public IP from metadata, using hostname"
-  PUBLIC_IP=$(hostname -f)
-fi
 docker run -d --restart unless-stopped -p 443:443 \
-  -e PUBLIC_URL="https://$PUBLIC_IP" \
   --name wss $IMAGE
+
+# Install cloudflared
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+chmod +x /usr/local/bin/cloudflared
+
+# Create cloudflared tunnel systemd service
+cat > /etc/systemd/system/cloudflared-tunnel.service << 'EOF'
+[Unit]
+Description=Cloudflare Tunnel (Quick Tunnel)
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/cloudflared tunnel --url https://localhost:443
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now cloudflared-tunnel

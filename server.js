@@ -23,17 +23,12 @@ app.get('/favicon.ico', (req, res) => res.redirect('/favicon.svg'));
 
 app.get('/api/server-info', (req, res) => {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    if (process.env.PUBLIC_URL) {
-        try {
-            const url = new URL(process.env.PUBLIC_URL);
-            const proto = url.protocol === 'https:' ? 'https' : 'http';
-            res.json({ ip: url.hostname, port: url.port || (proto === 'https' ? '443' : '3000'), protocol: proto });
-        } catch {
-            res.status(400).json({ error: 'Invalid PUBLIC_URL' });
-        }
-        return;
-    }
-    res.json({ ip: getLanIp(), port: PORT, protocol: hasCert ? 'https' : 'http' });
+    const host = req.headers.host || (getLanIp() + ':' + PORT);
+    const proto = req.headers['x-forwarded-proto'] || (hasCert ? 'https' : 'http');
+    const parts = host.split(':');
+    const ip = parts[0];
+    const port = parts[1] || (proto === 'https' ? '443' : '80');
+    res.json({ ip, port, protocol: proto });
 });
 
 app.use(express.static('public'));
