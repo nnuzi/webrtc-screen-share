@@ -19,6 +19,7 @@ function getLanIp() {
     return '127.0.0.1';
 }
 
+app.get('/', (req, res) => res.redirect('/sender.html'));
 app.get('/favicon.ico', (req, res) => res.redirect('/favicon.svg'));
 
 app.get('/api/server-info', (req, res) => {
