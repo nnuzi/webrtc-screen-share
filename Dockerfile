@@ -9,7 +9,8 @@ COPY . .
 RUN openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
     -keyout /etc/ssl/private/server.key \
     -out /etc/ssl/certs/server.crt \
-    -subj "/C=CN/O=WSS/CN=webrtc-screen-share" && \
+    -subj "/C=CN/O=WSS/CN=webrtc-screen-share" \
+    -addext "subjectAltName=DNS:localhost" && \
     addgroup -S appgroup && adduser -S appuser -G appgroup && \
     chown -R appuser:appgroup /app /etc/ssl/private /etc/ssl/certs
 
