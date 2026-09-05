@@ -1,31 +1,58 @@
 # WebRTC Screen Share
 
-基于 WebRTC 和 Socket.IO 的实时屏幕共享工具，桌面端向局域网内其他设备（平板、手机、笔记本）推送屏幕画面，无需接线或安装任何 App。
+[中文文档](README_zh.md)
 
-## 快速开始
+Real-time screen sharing over LAN via WebRTC + Socket.IO. No apps, no cables, no accounts.
 
-```bash
-npm install && node server.js
+Sender (desktop) captures screen and streams it P2P to receivers (tablets, phones, laptops) on the same network. The server acts only as a signaling relay — media never passes through the server.
+
+## Features
+
+- **P2P streaming** — media flows directly between sender and receiver, low latency
+- **Zero setup** — open browser, scan QR code, start sharing
+- **Room isolation** — multiple concurrent sessions don't interfere
+- **QR code join** — receiver scans to connect, no manual URL entry
+- **Auto reconnection** — recovers from brief disconnections without manual refresh
+- **Fullscreen mode** — double-click receiver video to toggle fullscreen
+- **i18n** — auto-detects browser language (zh/en), lazy-loads language packs
+- **Docker** — one-command deployment with self-signed HTTPS
+- **Cloudflare Tunnel** — public access via `*.trycloudflare.com`, no inbound port config needed
+
+## How It Works
+
+```
+Sender                              Receiver
+  │                                   │
+  │  1. Create room → QR code         │  2. Scan QR / open ?room= URL
+  │                                   │
+  │  3. getDisplayMedia               │
+  │     → WebRTC offer                │
+  │     → send via Socket.IO ────────→│  4. Receive offer → create answer
+  │                                   │     → send via Socket.IO
+  │←──────────────────────────────────│
+  │                                   │
+  │  ═══════ P2P media stream ════════│  5. Video plays
+  │                                   │
+  │  Socket.IO only for signaling     │
 ```
 
-## 使用方法
+## Quick Start
 
-1. **发送端** — 在桌面电脑打开 `http://localhost:3000/sender.html`（必须用 localhost）
-2. 点击 **"创建共享房间"**，生成房间号和二维码
-3. **接收端** — 在其他设备扫描二维码，或手动打开 `http://<服务器IP>:3000/receiver.html?room=<房间号>`
-4. 发送端点击 **"开始屏幕共享"**，选择要共享的窗口或屏幕
-5. 双击接收端视频可全屏显示
+### Local Development
 
-## 功能
+```bash
+git clone https://github.com/nnuzi/webrtc-screen-share.git
+cd webrtc-screen-share
+npm install
+npm start
+```
 
-- 实时 P2P 屏幕推流，媒体流不经过服务器
-- 房间隔离，多组用户互不干扰
-- 二维码扫码加入
-- 接收端双击全屏
-- 任何PC现代浏览器均可作为接收端
+- **Sender**: http://localhost:3000/sender.html (must use `localhost` for `getDisplayMedia` to work)
+- **Receiver**: http://localhost:3000/receiver.html?room=YOUR_ROOM
 
-## 环境变量
+### Docker
 
-| 变量 | 作用 |
-|------|------|
-| `PUBLIC_URL` | 覆盖服务端公网地址 |
+```bash
+docker build -t wss .
+docker run -d --restart unless-stopped -p 443:443 --name wss wss
+```
