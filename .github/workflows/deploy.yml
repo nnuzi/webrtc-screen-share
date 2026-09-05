@@ -54,7 +54,7 @@ jobs:
       - name: Install SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          printf '%s' '${{ secrets.SSH_PRIVATE_KEY }}' > ~/.ssh/ec2-key.pem
           chmod 600 ~/.ssh/ec2-key.pem
 
       - name: Deploy to EC2
