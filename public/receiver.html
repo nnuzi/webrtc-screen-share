@@ -1,23 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script src="https://cdn.tailwindcss.com"></script>
-<title>屏幕共享 · 接收端</title>
+<title data-i18n="receiver.title"></title>
 </head>
 <body class="m-0 bg-black flex justify-center items-center h-screen font-sans overflow-hidden">
     <div id="overlay" class="fixed inset-0 flex flex-col justify-center items-center bg-[#1a1a1a] text-white z-10 transition-opacity duration-300">
         <div class="w-9 h-9 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4"></div>
-        <div id="statusMsg">正在连接...</div>
-        <div id="overlayHint" class="text-white/50 text-xs mt-2">请确保发送端已开始共享</div>
+        <div id="statusMsg" data-i18n="receiver.connecting"></div>
+        <div id="overlayHint" class="text-white/50 text-xs mt-2" data-i18n="receiver.hint"></div>
     </div>
     <video id="remoteVideo" class="w-full h-full object-contain" autoplay playsinline muted></video>
     <script src="/socket.io/socket.io.js"></script>
     <script src="WebRTCManager.js"></script>
-    <script>
+    <script type="module">
+        import { getLang, loadLang, t, applyI18n } from './i18n.js';
+
+        await loadLang(getLang());
+        applyI18n();
+
         const WEBRTC_CONFIG = { bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 10 };
         const overlay = document.getElementById('overlay');
         const statusMsg = document.getElementById('statusMsg');
@@ -27,7 +32,7 @@
 
         const room = new URLSearchParams(location.search).get('room');
         if (!room) {
-            statusMsg.textContent = '缺少房间号，请通过二维码加入';
+            statusMsg.textContent = t('receiver.missingRoom');
             hint.textContent = '';
             throw new Error('Missing room query parameter');
         }
@@ -46,11 +51,11 @@
         }
 
         socket.on('connect_error', (err) => {
-            showOverlay('连接服务器失败: ' + (err.message || '未知错误'), '请检查网络连接');
+            showOverlay(t('receiver.connectServerFailed') + ': ' + (err.message || ''), t('receiver.checkNetwork'));
         });
 
         socket.on('connect', () => {
-            statusMsg.textContent = '等待发送端开始共享...';
+            statusMsg.textContent = t('receiver.waitingSender');
             socket.emit('ready');
         });
 
@@ -66,32 +71,32 @@
             if (state === 'connected' && remoteVideo.srcObject) {
                 hideOverlay();
             } else if (state === 'disconnected') {
-                showOverlay('连接已断开，等待恢复...');
+                showOverlay(t('receiver.disconnected'));
             } else if (state === 'failed') {
-                showOverlay('连接失败，请刷新页面重试');
+                showOverlay(t('receiver.connectionFailed'));
             } else if (state === 'closed') {
-                showOverlay('连接已关闭');
+                showOverlay(t('receiver.connectionClosed'));
             }
         });
 
         socket.on('disconnect', () => {
-            showOverlay('与服务器断开，正在重连...');
+            showOverlay(t('receiver.serverDisconnected'));
         });
 
         socket.on('peer-disconnected', () => {
-            showOverlay('发送端已离开房间', '请让发送端重新创建共享');
+            showOverlay(t('receiver.senderLeft'), t('receiver.senderLeftHint'));
             if (manager) manager.close();
         });
 
         socket.on('offer', async (offer) => {
-            statusMsg.textContent = '正在连接...';
+            statusMsg.textContent = t('receiver.connecting');
             try {
                 await manager.setRemote(offer);
                 const answer = await manager.pc.createAnswer();
                 await manager.pc.setLocalDescription(answer);
                 socket.emit('answer', answer);
             } catch (err) {
-                showOverlay('连接失败: ' + (err.message || '未知错误'), '请让发送端重新开始共享');
+                showOverlay(t('receiver.offerFailed') + ': ' + (err.message || ''), t('receiver.offerHint'));
             }
         });
 

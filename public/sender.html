@@ -1,37 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2563eb">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script src="https://cdn.tailwindcss.com"></script>
-<title>屏幕共享 · 发送端</title>
+<title data-i18n="sender.title"></title>
 </head>
 <body class="flex justify-center items-center min-h-screen bg-gray-100 font-sans">
     <div class="bg-white p-10 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.08)] text-center max-w-sm w-full">
         <div id="landing">
-            <h2 class="mb-6 text-gray-900 font-semibold text-xl">屏幕共享</h2>
-            <button id="createBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-blue-500 text-white hover:opacity-80">创建共享房间</button>
+            <h2 class="mb-6 text-gray-900 font-semibold text-xl" data-i18n="sender.heading"></h2>
+            <button id="createBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-blue-500 text-white hover:opacity-80" data-i18n="sender.createRoom"></button>
         </div>
 
         <div id="sharing" class="hidden">
-            <h2 class="mb-6 text-gray-900 font-semibold text-xl">屏幕共享</h2>
-            <div class="text-gray-400 text-[13px] mb-1">房间号</div>
+            <h2 class="mb-6 text-gray-900 font-semibold text-xl" data-i18n="sender.heading"></h2>
+            <div class="text-gray-400 text-[13px] mb-1" data-i18n="sender.roomCode"></div>
             <div class="text-4xl font-bold tracking-[6px] text-gray-900 my-3 mb-2 tabular-nums" id="roomCode"></div>
-            <div class="text-gray-400 text-[13px] mb-1 mt-3">扫描二维码加入</div>
+            <div class="text-gray-400 text-[13px] mb-1 mt-3" data-i18n="sender.scanQR"></div>
             <div class="mx-auto my-4 w-[200px] h-[200px] flex justify-center items-center bg-gray-50 rounded-xl p-2 border border-gray-200" id="qrcode"></div>
             <div class="text-blue-500 break-all text-xs leading-5 mb-5 select-all" id="receiverLink"></div>
             <div class="h-px bg-gray-200 my-5"></div>
-            <button id="shareBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-green-500 text-white hover:opacity-80" disabled>等待接收端加入...</button>
-            <button id="stopBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-red-500 text-white hover:opacity-80 mt-2">停止共享</button>
+            <button id="shareBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-green-500 text-white hover:opacity-80" disabled data-i18n="sender.waitingReceiver"></button>
+            <button id="stopBtn" class="w-full py-3 rounded-lg text-base cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity duration-200 bg-red-500 text-white hover:opacity-80 mt-2" data-i18n="sender.stopSharing"></button>
             <div class="mt-4 text-sm min-h-[20px]" id="statusText"></div>
         </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="WebRTCManager.js"></script>
-    <script>
+    <script type="module">
+        import { getLang, loadLang, t, applyI18n } from './i18n.js';
+
+        await loadLang(getLang());
+        applyI18n();
+
         const $ = id => document.getElementById(id);
         const $landing = $('landing');
         const $sharing = $('sharing');
@@ -68,12 +73,12 @@
                 reconnectAttempts = 0;
                 if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
                 if (isSharing) {
-                    $status.textContent = '共享中...';
+                    $status.textContent = t('sender.sharing');
                     $status.className = STATUS_BASE;
                 }
             } else if (state === 'disconnected') {
                 if (isSharing && !reconnectTimer) {
-                    $status.textContent = '连接中断，正在重连...';
+                    $status.textContent = t('sender.connectionInterrupted');
                     $status.className = STATUS_BASE;
                     reconnectTimer = setTimeout(() => attemptReconnect(), RECONNECT_DEBOUNCE_MS);
                 }
@@ -81,10 +86,10 @@
                 if (isSharing && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                     attemptReconnect();
                 } else if (!isSharing) {
-                    $status.textContent = '连接失败，请刷新重试';
+                    $status.textContent = t('sender.connectionFailed');
                     $status.className = STATUS_BASE + ' text-red-500';
                 } else {
-                    $status.textContent = '重连失败，请刷新重试';
+                    $status.textContent = t('sender.reconnectFailed');
                     $status.className = STATUS_BASE + ' text-red-500';
                 }
             }
@@ -93,7 +98,7 @@
         async function attemptReconnect() {
             reconnectAttempts++;
             reconnectTimer = null;
-            $status.textContent = `正在重连 (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`;
+            $status.textContent = t('sender.reconnecting', { n: reconnectAttempts, max: MAX_RECONNECT_ATTEMPTS });
             $status.className = STATUS_BASE;
             try {
                 const oldManager = manager;
@@ -132,12 +137,12 @@
                 socket.emit('offer', offer);
 
                 if (oldManager) oldManager.close();
-                $status.textContent = '已重连成功';
+                $status.textContent = t('sender.reconnected');
                 $status.className = STATUS_BASE + ' text-green-500';
             } catch (err) {
                 console.error('Reconnect failed:', err);
                 if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-                    $status.textContent = '重连失败，请刷新重试';
+                    $status.textContent = t('sender.reconnectFailed');
                     $status.className = STATUS_BASE + ' text-red-500';
                 }
             }
@@ -145,11 +150,11 @@
 
         $createBtn.onclick = async () => {
             $createBtn.disabled = true;
-            $createBtn.textContent = '正在创建...';
+            $createBtn.textContent = t('sender.creating');
 
             try {
                 if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
-                    throw new Error('当前浏览器不支持屏幕共享，请使用 Chrome/Firefox/Edge，并通过 http://localhost:3000 访问');
+                    throw new Error(t('sender.browserNotSupported'));
                 }
 
                 room = Math.random().toString(36).substring(2, 8).toLowerCase();
@@ -164,7 +169,7 @@
                 const img = new Image();
                 img.onerror = () => {
                     img.remove();
-                    $qrcode.innerHTML = '<div class="text-gray-400 text-sm">二维码加载失败，请手动复制链接</div>';
+                    $qrcode.innerHTML = `<div class="text-gray-400 text-sm">${t('sender.qrFailed')}</div>`;
                 };
                 img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(receiverUrl)}`;
                 img.alt = 'QR Code';
@@ -175,13 +180,13 @@
 
                 socket.on('connect_error', (err) => {
                     $status.className = STATUS_BASE + ' text-red-500';
-                    $status.textContent = '连接服务器失败: ' + (err.message || '未知错误');
+                    $status.textContent = t('sender.connectServerFailed') + ': ' + (err.message || '');
                 });
 
                 socket.on('disconnect', (reason) => {
                     if (reason === 'io server disconnect' || reason === 'transport close') {
                         $status.className = STATUS_BASE + ' text-red-500';
-                        $status.textContent = '与服务器断开连接';
+                        $status.textContent = t('sender.disconnectedFromServer');
                     }
                 });
 
@@ -191,32 +196,32 @@
                 socket.on('candidate', (c) => manager.addRemoteCandidate(c));
                 socket.on('answer', (a) => {
                     manager.setRemote(a);
-                    $status.textContent = '共享中...';
+                    $status.textContent = t('sender.sharing');
                     $status.className = STATUS_BASE;
                 });
 
                 socket.on('receiver-ready', () => {
                     $shareBtn.disabled = false;
                     $shareBtn.className = BTN_GREEN;
-                    $shareBtn.textContent = '开始屏幕共享';
-                    $status.textContent = '接收端已加入，点击开始共享';
+                    $shareBtn.textContent = t('sender.startSharing');
+                    $status.textContent = t('sender.receiverJoined');
                     $status.className = STATUS_BASE + ' text-green-500';
                 });
 
-                $stopBtn.textContent = '退出房间';
-                $status.textContent = '等待接收端扫码加入...';
+                $stopBtn.textContent = t('sender.exitRoom');
+                $status.textContent = t('sender.waitingReceiverJoin');
                 $status.className = STATUS_BASE;
             } catch (err) {
                 console.error(err);
                 $status.className = STATUS_BASE + ' text-red-500';
-                $status.textContent = err.message || '创建失败';
+                $status.textContent = err.message || t('sender.createFailed');
                 setTimeout(cleanup, 5000);
             }
         };
 
         $shareBtn.onclick = async () => {
             $shareBtn.disabled = true;
-            $shareBtn.textContent = '正在共享...';
+            $shareBtn.textContent = t('sender.sharing');
 
             try {
                 const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -256,9 +261,9 @@
 
                 isSharing = true;
                 reconnectAttempts = 0;
-                $stopBtn.textContent = '停止共享';
-                $shareBtn.textContent = '共享中';
-                $status.textContent = '等待接收端连接...';
+                $stopBtn.textContent = t('sender.stopSharing');
+                $shareBtn.textContent = t('sender.sharingLabel');
+                $status.textContent = t('sender.waitingReceiverConnect');
                 $status.className = STATUS_BASE;
 
                 videoTrack.onended = () => {
@@ -267,9 +272,9 @@
             } catch (err) {
                 console.error(err);
                 $shareBtn.disabled = false;
-                $shareBtn.textContent = '开始屏幕共享';
+                $shareBtn.textContent = t('sender.startSharing');
                 $status.className = STATUS_BASE + ' text-red-500';
-                $status.textContent = err.message || '共享启动失败';
+                $status.textContent = err.message || t('sender.shareFailed');
             }
         };
 
@@ -293,12 +298,12 @@
             manager = new WebRTCManager(WEBRTC_CONFIG);
             setupManagerListeners(manager);
 
-            $stopBtn.textContent = '退出房间';
+            $stopBtn.textContent = t('sender.exitRoom');
             $shareBtn.disabled = false;
             $shareBtn.className = BTN_GREEN;
-            $shareBtn.textContent = '开始屏幕共享';
+            $shareBtn.textContent = t('sender.startSharing');
             $status.className = STATUS_BASE;
-            $status.textContent = '已停止共享，可重新开始';
+            $status.textContent = t('sender.stopped');
         }
 
         function cleanup() {
@@ -320,10 +325,10 @@
             $status.textContent = '';
             $shareBtn.disabled = true;
             $shareBtn.className = BTN_GREEN;
-            $shareBtn.textContent = '等待接收端加入...';
+            $shareBtn.textContent = t('sender.waitingReceiver');
             $createBtn.disabled = false;
             $createBtn.className = BTN_BLUE;
-            $createBtn.textContent = '创建共享房间';
+            $createBtn.textContent = t('sender.createRoom');
         }
 
         function setVideoTrackContentHints(stream, hint) {
