@@ -52,20 +52,18 @@ jobs:
           path: /tmp
 
       - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: unnecessary
-          config: |
-            Host ec2
-              HostName ${{ secrets.EC2_HOST }}
-              User ubuntu
-              StrictHostKeyChecking no
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          chmod 600 ~/.ssh/ec2-key.pem
 
       - name: Deploy to EC2
+        env:
+          SSH_OPTS: "-i ~/.ssh/ec2-key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
         run: |
-          scp /tmp/wss-src.tar.gz ec2:/tmp/wss-src.tar.gz
-          ssh ec2 'bash -s' <<'DEPLOY'
+          TARGET="ubuntu@${{ secrets.EC2_HOST }}"
+          scp $SSH_OPTS /tmp/wss-src.tar.gz $TARGET:/tmp/wss-src.tar.gz
+          ssh $SSH_OPTS $TARGET 'bash -s' <<'DEPLOY'
             set -e
             sudo rm -rf /opt/wss && sudo mkdir -p /opt/wss
             sudo tar xzf /tmp/wss-src.tar.gz -C /opt/wss
@@ -83,9 +81,12 @@ jobs:
           DEPLOY
 
       - name: Get tunnel URL
+        env:
+          SSH_OPTS: "-i ~/.ssh/ec2-key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
         run: |
           sleep 10
-          URL=$(ssh ec2 'sudo docker logs cloudflared-tunnel 2>&1' \
+          URL=$(ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} \
+            'sudo docker logs cloudflared-tunnel 2>&1' \
             | grep -oE 'https://[a-z0-9.-]+\.trycloudflare\.com' | head -1 || true)
           echo "### Deployment Info" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
