@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
 
 env:
-  ECR_REGISTRY: 298370269944.dkr.ecr.ap-northeast-1.amazonaws.com
-  ECR_REPOSITORY: webrtc-screen-share
-  ECR_IMAGE_TAG: ${{ github.sha }}
+  IMAGE: wss
+  APP_PORT: "1443"
 
 jobs:
   check:
@@ -20,75 +19,79 @@ jobs:
       - run: npm run lint
       - run: docker build .
 
-  build-push:
+  build:
     needs: check
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Package source
+        run: |
+          tar czf /tmp/wss-src.tar.gz \
+            --exclude='./node_modules' \
+            --exclude='./.git' \
+            --exclude='./terraform' \
+            --exclude='./.github' \
+            --exclude='./.DS_Store' \
+            --exclude='./dist' \
+            --exclude='./build' \
+            -C "${{ github.workspace }}" .
+      - uses: actions/upload-artifact@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-northeast-1
-      - run: aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
-      - run: docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$ECR_IMAGE_TAG .
-      - run: docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$ECR_IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - run: docker push --all-tags $ECR_REGISTRY/$ECR_REPOSITORY
+          name: wss-src
+          path: /tmp/wss-src.tar.gz
+          retention-days: 1
 
   deploy:
-    needs: build-push
+    needs: build
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/download-artifact@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-northeast-1
-      - uses: hashicorp/setup-terraform@v3
-      - run: terraform init
-        working-directory: terraform
-      - run: terraform plan -out=tfplan -lock-timeout=60s
-        working-directory: terraform
-        env:
-          TF_VAR_github_repo: ${{ github.repository }}
-          TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
-          TF_VAR_image_tag: ${{ github.sha }}
-      - run: terraform apply tfplan
-        working-directory: terraform
-        env:
-          TF_VAR_github_repo: ${{ github.repository }}
-          TF_VAR_github_token: ${{ secrets.TF_VAR_github_token }}
-          TF_VAR_image_tag: ${{ github.sha }}
-      - id: get_eip
-        run: echo "eip=$(terraform output -raw eip)" >> "$GITHUB_OUTPUT"
-        working-directory: terraform
-      - run: |
-          echo "Waiting for service..."
-          sleep 30
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            curl -sSk --connect-timeout 5 https://${{ steps.get_eip.outputs.eip }}/api/server-info && echo " Health check passed" && exit 0
-            echo "Retry $i..."
-            sleep 10
-          done
-          echo "Health check failed"
-          exit 1
+          name: wss-src
+          path: /tmp
 
       - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: unnecessary
+          config: |
+            Host ec2
+              HostName ${{ secrets.EC2_HOST }}
+              User ubuntu
+              StrictHostKeyChecking no
+
+      - name: Deploy to EC2
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
-          chmod 600 ~/.ssh/ec2-key.pem
+          scp /tmp/wss-src.tar.gz ec2:/tmp/wss-src.tar.gz
+          ssh ec2 'bash -s' <<'DEPLOY'
+            set -e
+            sudo rm -rf /opt/wss && sudo mkdir -p /opt/wss
+            sudo tar xzf /tmp/wss-src.tar.gz -C /opt/wss
+            cd /opt/wss
+            sudo docker rm -f wss 2>/dev/null || true
+            sudo docker build -t wss .
+            sudo docker run -d --restart unless-stopped \
+              -p 1443:1443 -e PORT=1443 \
+              --name wss wss
+            sudo docker rm -f cloudflared-tunnel 2>/dev/null || true
+            sudo docker run -d --restart unless-stopped --network host \
+              --name cloudflared-tunnel \
+              cloudflare/cloudflared:latest tunnel --no-autoupdate \
+              --url https://localhost:1443 --no-tls-verify
+          DEPLOY
 
       - name: Get tunnel URL
         run: |
           sleep 10
-          URL=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2-key.pem ubuntu@${{ steps.get_eip.outputs.eip }} \
-            "sudo docker logs cloudflared-tunnel 2>&1 | grep -o 'https://[^ ]*\.trycloudflare\.com' | tail -1")
-          echo "### Tunnel URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+          URL=$(ssh ec2 'sudo docker logs cloudflared-tunnel 2>&1' \
+            | grep -oE 'https://[a-z0-9.-]+\.trycloudflare\.com' | head -1 || true)
+          echo "### Deployment Info" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tunnel URL:** $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Sender:  $URL/sender.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Receiver: $URL/receiver.html?room=YOUR_ROOM" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Tunnel URL: $URL"
